@@ -2,17 +2,24 @@
 name: a-stock-data
 description: A股全栈数据工具包 — 覆盖行情(mootdx+腾讯+百度K线)、研报(东财+同花顺+iwencai)、信号(同花顺热点+北向+龙虎榜+解禁+行业)、资金面(融资融券+大宗交易+股东户数+分红+资金流分钟级+资金流120日)、新闻(东财个股+全球资讯)、基础数据(mootdx财务/F10+东财+新浪三表)、公告(巨潮)七层数据源，内嵌全部调用代码，自包含零依赖外部文件。优先用通达信(mootdx)/腾讯(不封IP)，东财接口已内置限流防封。适用于个股估值、研报检索、题材归因、龙虎榜跟踪、解禁预警、行业轮动、融资融券跟踪、筹码分析、产业链调研、批量筛选等场景。
 origin: custom
-version: 3.2.1
+version: 3.2.2
 ---
 
 > 📦 项目主页：https://github.com/simonlin1212/a-stock-data — 更新、反馈、支持作者
 > 
 > 作者：Simon 林 · 抖音「Simon林」· 公众号「硅基世纪」
 
-# A股全栈数据工具包 V3.2.1
+# A股全栈数据工具包 V3.2.2
 
-七层数据架构，27 个端点实测可用（2026-05 验证；财联社快讯已下线，详见 §5.2），覆盖主板/中小板/科创板/ST。
+七层数据架构，27 个端点实测可用（2026-06 验证；财联社快讯已下线，详见 §5.2），覆盖主板/中小板/科创板/ST。
 
+> **V3.2.2（失效接口替换 + 隐藏 Bug 修复）：**
+> - **§3.3 概念板块归属（#18）**：百度 PAE `getrelatedblock` 失效（`ResultCode 10003` + 空数组）→ 改用东财 `slist`（`spt=3`）`eastmoney_concept_blocks()`，一次请求拿全个股所属板块（行业/概念/地域 + BK码 + 涨跌幅 + 龙头股），零鉴权走 `em_get` 限流。
+> - **§7.1 巨潮公告 orgId（#19）**：硬编码 `gssx0{code}` 致大量 601xxx 股票 `totalAnnouncement=0` → 新增 `_cninfo_orgid()` 动态查官方映射表 `szse_stock.json`（6198 只股，模块级缓存），硬编码降为 fallback。
+> - **综合示例修复**：示例仍调用 v3.1 已删的 `baidu_fund_flow_history` → 改 `eastmoney_fund_flow_minute`。
+> - **§4.5/§5.1 风控说明**：部分大陆住宅 IP 被东财间歇风控（`HTTP 000`/空）非代码 Bug，加重试/换网络提示。
+> - 新代码原样 exec smoke test 实测：板块归属 茅台27/五粮液28/绿的谐波21；公告 平安601318/工行601398 原失效股恢复。
+>
 > **V3.2.1（Bug 修复）：** 修复两个内嵌函数的解析逻辑（预先存在，非 V3.2 引入）——
 > - **§5.1 东财个股新闻**：东财实际返回里 `result.cmsArticleWebOld` 直接就是文章列表，旧写法对 list 调 `.get("list")` 触发 AttributeError / 返回空 → 改为遍历 `cmsArticleWebOld` 列表本身。
 > - **§6.4 新浪财报三表**：新浪实际结构是 `result.data.report_list`（按报告期为键的 dict，每期 `data` 才是行项列表），旧写法取 `result.data.{lrb}` 永久返回空 → 改为遍历 `report_list` 期次、从每期 `data` 按 `item_title` 提取。
@@ -42,7 +49,7 @@ version: 3.2.1
 信号层
 ├── 同花顺热点     → 当日强势股 + 题材归因 reason tags (零鉴权 73ms)
 ├── 同花顺北向     → hgt/sgt 分钟资金流向 + 本地自缓存历史
-├── 百度股市通     → 概念板块归属 (HTTP)
+├── 东财 slist     → 个股所属板块/概念归属 (V3.2.2 替换百度PAE)
 ├── 东财 push2     → 个股资金流向 分钟级 (V3.1 替换百度PAE)
 ├── 龙虎榜席位     → 上榜记录 + 买卖席位 TOP5 + 机构动向 (datacenter-web)
 ├── 全市场龙虎榜   → 每日全市场上榜股票 + 净买额排名 (datacenter-web)
@@ -801,62 +808,59 @@ hist = _load_northbound_history(20)
 print(hist)
 ```
 
-### 3.3 百度股市通 — 概念板块归属
+### 3.3 东财 slist — 个股所属板块/概念归属（V3.2.2 替换百度）
 
-**核心价值：** 一次调用拿到个股所属的行业（申万一级/二级）、概念（多个）、地域三维分类，含当日涨跌幅。
+**核心价值：** 一次调用拿到个股所属的全部板块（行业 + 概念 + 地域混合），含板块代码（BK码）、当日涨跌幅、板块龙头股。题材归因、板块联动分析必备。
+
+> **V3.2.2 替换说明：** 百度 PAE `getrelatedblock` 接口已失效（实测返回 `ResultCode 10003` + 空数组，#18），改用东财 `slist` 个股所属板块接口（`spt=3`，一次请求拿全，零鉴权）。东财把行业/概念/地域混在**一个列表**里返回，板块名本身已自解释（如「食品饮料」是行业、「贵州板块」是地域、「酿酒概念」是概念），AI 直接用板块名做题材归因即可。
 
 ```python
-import requests
-
-_BAIDU_PAE_HEADERS = {
-    "Host": "finance.pae.baidu.com",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/117.0.0.0",
-    "Accept": "application/vnd.finance-web.v1+json",
-    "Origin": "https://gushitong.baidu.com",
-    "Referer": "https://gushitong.baidu.com/",
-}
-
-def baidu_concept_blocks(code: str) -> dict:
+def eastmoney_concept_blocks(code: str) -> dict:
     """
-    百度股市通概念板块归属。
-    返回: {industry: [...], concept: [...], region: [...], concept_tags: [...]}
+    个股所属板块/概念归属（东财 slist，一次请求拿全，已内置限流）。
+    返回: {total, boards: [{name, code(BK码), change_pct, lead_stock}], concept_tags: [板块名...]}
+    boards 混合 行业/概念/地域，板块名自解释；concept_tags 是所有板块名的便捷列表。
     """
-    url = (
-        f"https://finance.pae.baidu.com/api/getrelatedblock"
-        f"?code={code}&market=ab"
-        f"&typeCode=all&finClientType=pc"
-    )
-    r = requests.get(url, headers=_BAIDU_PAE_HEADERS, timeout=10)
-    d = r.json()
-    if str(d.get("ResultCode", -1)) != "0":
-        raise RuntimeError(f"百度PAE错误: {d}")
+    market_code = 1 if code.startswith("6") else 0
+    params = {
+        "fltt": "2", "invt": "2",
+        "secid": f"{market_code}.{code}",
+        "spt": "3", "pi": "0", "pz": "200", "po": "1",
+        "fields": "f12,f14,f3,f128",
+    }
+    headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
+    try:
+        r = em_get("https://push2.eastmoney.com/api/qt/slist/get",
+                   params=params, headers=headers, timeout=15)
+        d = r.json()
+    except Exception as e:
+        print(f"[WARN] 东财板块归属请求失败: {e}")
+        return {"total": 0, "boards": [], "concept_tags": []}
 
-    result = {"industry": [], "concept": [], "region": [], "concept_tags": []}
-    for block in d.get("Result", []):
-        block_type = block.get("type", "")
-        for item in block.get("list", []):
-            entry = {
-                "name": item.get("name", ""),
-                "change_pct": item.get("increase", ""),
-                "desc": item.get("desc", ""),
-            }
-            if "行业" in block_type:
-                result["industry"].append(entry)
-            elif "概念" in block_type:
-                result["concept"].append(entry)
-                result["concept_tags"].append(entry["name"])
-            elif "地域" in block_type:
-                result["region"].append(entry)
-    return result
+    diff = (d.get("data") or {}).get("diff") or {}
+    items = diff.values() if isinstance(diff, dict) else diff
+    boards = []
+    for it in items:
+        boards.append({
+            "name": it.get("f14", ""),         # 板块名
+            "code": it.get("f12", ""),         # BK 板块代码
+            "change_pct": it.get("f3", ""),    # 板块当日涨跌幅
+            "lead_stock": it.get("f128", ""),  # 板块龙头股
+        })
+    return {
+        "total": len(boards),
+        "boards": boards,
+        "concept_tags": [b["name"] for b in boards],
+    }
 
 # 用法
-blocks = baidu_concept_blocks("688017")
-print("行业:", [b["name"] for b in blocks["industry"]])
-print("概念:", blocks["concept_tags"])
-print("地域:", [b["name"] for b in blocks["region"]])
+blocks = eastmoney_concept_blocks("600519")
+print(f"共 {blocks['total']} 个板块")
+print("板块归属:", blocks["concept_tags"])
+# → ['食品饮料', '白酒Ⅲ', '白酒Ⅱ', '贵州板块', '酿酒概念', 'HS300_', ...]
 ```
 
-> **踩坑：** `ResultCode` 返回类型不稳定——有时 int `0`，有时 string `"0"`。必须用 `str()` 统一比较。
+> **注意：** 东财不区分行业/概念/地域类型（混在一个列表返回）。如需精确分类可按板块名判断，或另查全市场板块清单（`clist` + `m:90+t:1/2/3`）——但后者每次需多发请求、大页易触发风控，不推荐在批量场景用。
 
 ### 3.4 东财 push2 — 个股资金流向（分钟级）
 
@@ -1419,6 +1423,8 @@ total_main = sum(d["main_net"] for d in recent_20)
 print(f"\n近20日主力累计净流入: {total_main/1e8:.2f}亿")
 ```
 
+> **⚠️ 大陆住宅 IP 间歇封锁（#18）：** push2/push2his 系列对**部分大陆住宅宽带 IP** 有连接级风控，表现为偶发 `HTTP 000`（连接被拒/超时）或返回空——**这不是代码问题**（同一代码在其他网络/时段实测正常）。遇到时：① 隔几分钟重试；② 换网络环境（如手机热点）；③ 降低请求频率（调大 `EM_MIN_INTERVAL`）。日级资金流务实替代：仍可用 mootdx 算量价，或换时段重试。
+
 ---
 
 ## Layer 5: 新闻层
@@ -1475,6 +1481,8 @@ news = eastmoney_stock_news("688017")
 for n in news[:5]:
     print(f"  {n['time']} | {n['source']} | {n['title']}")
 ```
+
+> **⚠️ 间歇性返回空（#18）：** 部分大陆住宅 IP 调本接口会只拿到 `passportWeb`（股民资料）而无 `cmsArticleWebOld`（文章列表）——这是东财对该 IP 的间歇风控，非代码问题。代码已对空结果安全返回 `[]`；遇到时隔几分钟或换网络重试即可。
 
 ### 5.2 财联社快讯（直连 cls.cn）— ⚠️ 已下线，改用 §5.3
 
@@ -1704,19 +1712,39 @@ def _cninfo_ts_to_date(ts):
         return datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d")
     return str(ts)[:10] if ts else ""
 
+# 巨潮 股票→orgId 映射（模块级缓存，首次调用时拉取一次，全程复用）
+_CNINFO_ORGID_MAP = {}
+
+def _cninfo_orgid(code: str) -> str:
+    """查股票真实 orgId。巨潮 orgId 并非统一 `gssx0{code}` 格式（如 601318→9900002221、
+    601398→jjxt0000019、688017→9900041602），硬编码会导致大量股票（尤其 601xxx 段）
+    返回 totalAnnouncement=0、查不到公告（#19）。优先动态查官方映射表，查不到再回退硬编码。"""
+    global _CNINFO_ORGID_MAP
+    if not _CNINFO_ORGID_MAP:
+        try:
+            r = requests.get("http://www.cninfo.com.cn/new/data/szse_stock.json",
+                             headers={"User-Agent": UA}, timeout=15)
+            _CNINFO_ORGID_MAP = {s["code"]: s["orgId"]
+                                 for s in r.json().get("stockList", [])}
+        except Exception as e:
+            print(f"[WARN] 巨潮 orgId 映射表拉取失败，回退硬编码规则: {e}")
+    org = _CNINFO_ORGID_MAP.get(code)
+    if org:
+        return org
+    # fallback：老格式（仅部分老股票如 600519/600036 适用）
+    if code.startswith("6"):
+        return f"gssh0{code}"
+    elif code.startswith("8") or code.startswith("4"):
+        return f"gsbj0{code}"
+    return f"gssz0{code}"
+
 def cninfo_announcements(code: str, page_size: int = 30) -> list[dict]:
     """
     巨潮公告全文检索。
     返回: [{title, type, date, url}]
     """
     url = "https://www.cninfo.com.cn/new/hisAnnouncement/query"
-    # 构造 orgId（巨潮 2026 新格式）
-    if code.startswith("6"):
-        org_id = f"gssh0{code}"
-    elif code.startswith("8") or code.startswith("4"):
-        org_id = f"gsbj0{code}"
-    else:
-        org_id = f"gssz0{code}"
+    org_id = _cninfo_orgid(code)   # 动态查真实 orgId（#19 修复，自带硬编码 fallback）
 
     payload = {
         "stock": f"{code},{org_id}",
@@ -1960,14 +1988,14 @@ print(f"PE={q['pe_ttm']} PB={q['pb']} 市值={q['mcap_yi']}亿")
 # 4. PEG校验
 
 # 5. 概念板块归属
-blocks = baidu_concept_blocks(code)
-print(f"概念: {', '.join(blocks['concept_tags'][:10])}")
+blocks = eastmoney_concept_blocks(code)
+print(f"板块: {', '.join(blocks['concept_tags'][:10])}")
 
-# 6. 资金流向（百度分钟级）
-flow = baidu_fund_flow_history(code)
+# 6. 资金流向（分钟级，当日盘中）
+flow = eastmoney_fund_flow_minute(code)
 if flow:
-    recent = flow[0]
-    print(f"最近主力净流入: {recent['mainIn']}万")
+    total = sum(f["main_net"] for f in flow)
+    print(f"当日主力累计净流入: {total/1e4:.0f}万")
 
 # 7. 资金流向（东财120日）
 flow_120 = stock_fund_flow_120d(code)

@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.2.2 — 2026-06-03
+
+### 修复（失效接口替换 + 隐藏 Bug）
+- **§3.3 概念板块归属（#18）**：百度 PAE `getrelatedblock` 接口失效（实测返回 `ResultCode 10003` + 空数组）→ 替换为东财 `slist`（`spt=3`）个股所属板块接口 `eastmoney_concept_blocks()`，**一次请求**拿全行业/概念/地域混合板块列表（板块名 + BK码 + 涨跌幅 + 龙头股），零鉴权、走 `em_get` 限流。函数名 `baidu_concept_blocks` → `eastmoney_concept_blocks`。
+- **§7.1 巨潮公告 orgId 硬编码（#19）**：旧代码用 `gssx0{code}` 规则硬编码 orgId，但巨潮 orgId 并非统一格式（601318→`9900002221`、601398→`jjxt0000019`、688017→`9900041602`），导致大量股票（尤其 601xxx 段）`totalAnnouncement=0` 查不到公告 → 新增 `_cninfo_orgid()`，动态查官方映射表 `szse_stock.json`（模块级缓存，6198 只股），硬编码规则降为 fallback。
+- **综合用法示例隐藏崩溃**：示例第 6 步仍调用 v3.1 已删除的 `baidu_fund_flow_history()`（`recent['mainIn']`）→ 改为 `eastmoney_fund_flow_minute()`；第 5 步 `baidu_concept_blocks` → `eastmoney_concept_blocks`。
+
+### 文档（诚实标注，非代码 Bug）
+- **§4.5 120日资金流 / §5.1 个股新闻**：实测代码本身正常（多网络/时段返回完整数据），但**部分大陆住宅 IP** 会被东财 push2/search-api 连接级间歇风控（表现 `HTTP 000` 或只返回 `passportWeb`）→ 两节各加 ⚠️ 说明：隔几分钟重试 / 换网络 / 调大 `EM_MIN_INTERVAL`。这是 IP 级风控，非代码问题（#18 报告者环境复现，作者多环境实测正常）。
+
+### 测试
+- 新代码原样 exec smoke test（含 `em_get` 助手）实测：`eastmoney_concept_blocks` 茅台 27 / 五粮液 28 / 绿的谐波 21 个板块均非空、分类正确；`cninfo_announcements` 平安 601318（2454条）/ 工行 601398（2483条）原失效股恢复，茅台 600519 老规则 fallback 兼容。
+- §1.3 百度 K线（同 PAE 主机）实测仍正常（`ResultCode 0`，2001 根），百度作为数据源保留。
+
+### 说明
+- 端点数（27）、数据源数不变（百度因 K线 保留，东财 slist 已在册）；本次为失效接口替换 + orgId 动态化 + 示例修复。
+
 ## v3.2.1 — 2026-05-30
 
 ### 修复（预先存在的解析 Bug，非 v3.2 引入）

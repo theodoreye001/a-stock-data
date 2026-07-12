@@ -1,18 +1,21 @@
 ---
 name: a-stock-data
-description: 当任务需要写代码实际获取A股数据时使用——拉取行情/K线(mootdx+腾讯+百度)、研报(东财+同花顺+iwencai)、信号(热点/北向/龙虎榜/解禁/行业)、资金面(融资融券/大宗/股东户数/分红/资金流)、新闻、财务三表/F10、公告(巨潮)、打板(涨停池/连板/炸板率)、ETF期权(T型报价/希腊字母/IV)、舆情互动(互动易/热榜/人气榜)等真实数据。十层数据源·43端点(含3官方备胎)·内嵌全部可运行代码，自包含零依赖外部文件；优先用通达信(mootdx)/腾讯(不封IP)，东财接口已内置限流防封，主源被封可查「备用源速查」降级。仅在需要调用数据接口取数时使用：A股概念解释、投资观点讨论、策略问答等无需取数的话题不要加载本skill。
+description: 当任务需要写代码实际获取A股数据时使用——拉取行情/K线(mootdx+腾讯+百度)、研报(东财+同花顺+iwencai)、信号(热点/北向/龙虎榜/解禁/行业)、资金面(融资融券/大宗/股东户数/分红/资金流)、新闻、财务三表/F10、公告(巨潮)、打板(涨停池/连板/炸板率)、ETF期权(T型报价/希腊字母/IV)、舆情互动(互动易/热榜/人气榜)、技术指标(MACD/KDJ/RSI/布林带/均线,stockstats本地计算)等真实数据。十一层数据源·44端点(含3官方备胎)·内嵌全部可运行代码，自包含零依赖外部文件；优先用通达信(mootdx)/腾讯(不封IP)，东财接口已内置限流防封，主源被封可查「备用源速查」降级。仅在需要调用数据接口取数时使用：A股概念解释、投资观点讨论、策略问答等无需取数的话题不要加载本skill。
 origin: custom
-version: 3.4.0
+version: 3.5.0
 ---
 
 > 📦 项目主页：https://github.com/simonlin1212/a-stock-data — 更新、反馈、支持作者
 > 
 > 作者：Simon 林 · 抖音「Simon林」· 公众号「硅基世纪」
 
-# A股全栈数据工具包 V3.4.0
+# A股全栈数据工具包 V3.5.0
 
-十层数据架构，43 个端点实测可用（40 主端点 + 3 官方备胎，2026-07 验证），覆盖主板/中小板/科创板/ST。每类数据在「备用源速查」列有独立备胎，主源被封时可降级。
+十一层数据架构，44 个端点实测可用（41 主端点 + 3 官方备胎，2026-07 验证），覆盖主板/中小板/科创板/ST。每类数据在「备用源速查」列有独立备胎，主源被封时可降级。
 
+> **V3.5.0（技术指标层，2026-07-12）：**
+> - **新增 §11 技术指标层（本地计算）`technical_indicators()`**：把 `stockstats`（Prerequisites 依赖表早已列，此前无任何函数使用）封装成显式内嵌函数——纯本地计算，不新增数据源、不发指标类网络请求，复用 §1.1 mootdx K 线，一次算全 MACD(`macd`/`macds`/`macdh`)、KDJ(`kdjk`/`kdjd`/`kdjj`)、RSI(`rsi_6/12/24`)、布林带(`boll`/`boll_ub`/`boll_lb`)、多周期均线(`close_5/10/20/60_sma`)及 dma/atr/cci。兼容 stockstats 新版 `wrap()` / 旧版 `retype()`，并把 mootdx 的 `vol` 归一化为 stockstats 要求的 `volume`。**复权警示**：mootdx bars 不复权，跨除权除息日算 MACD/KDJ/布林带会失真，跨除权日改用带前复权的腾讯/百度日 K。端点 43 → 44，层 10 → 11，数据源不变（15，纯本地计算）。
+>
 > **V3.4.0（接口质量 + 备用源韧性，2026-07-11）：**
 > - **§5.2 财联社快讯复活**：旧 nodeapi 2026-05 下线后，改走官方 `v1/roll/get_roll_list` + 本地签名（`sign=md5(sha1(排序query))`，零 key），V3.2 移除的全市场电报能力恢复，与东财 7×24 互为独立备份。实测 errno=0。
 > - **新增「备用源速查 & 降级策略」章节**：十层主源→独立备胎速查表（不同域名/不同风控面）+ 3 个实测备胎函数——`dragon_tiger_backup()`（沪深交易所官方龙虎榜，含营业部席位）、`fund_flow_backup()`（新浪日度资金流）、`announcements_backup()`（深市深交所官方/沪市东财公告+PDF）。端点 40 → 43，数据源 13 → 15（新增沪深交易所官方）。
@@ -107,6 +110,9 @@ ETF期权层 (V3.3 新增)
 ├── 同花顺热榜     → 人气值/概念标签/排名变化 (10jqka)
 ├── 东财人气榜     → 排名+排名变化+名称价格 (emappdata)
 └── 东财概念命中   → 个股被归到哪些概念在炒+热度 (emappdata)
+
+技术指标层（本地计算，V3.5 新增）
+└── stockstats 封装 → 基于 mootdx K线本地算 MACD/KDJ/RSI/布林带/多周期MA (不新增数据源/不发请求)
 ```
 
 ## 端点路由速查（按需定位，不必通读全文）
@@ -151,6 +157,7 @@ ETF期权层 (V3.3 新增)
 | 10.1 | `cninfo_irm(code)` | 互动易问答（提问+公司回复） | 巨潮 |
 | 10.2 | `ths_hot_list()` / `em_hot_rank()` / `em_hot_concept(code)` | 热榜/人气榜/概念命中 | 同花顺+东财 |
 | 备用源速查 | `dragon_tiger_backup` / `fund_flow_backup` / `announcements_backup` | 龙虎榜/资金流/公告官方备胎（主源被封时降级） | 交易所官方+新浪+东财(沪市公告) |
+| 11.1 | `technical_indicators(code)` | MACD/KDJ/RSI/布林带/多周期MA | 本地计算 |
 | 估值公式 | `forward_pe` / `pe_digestion` / `calc_peg` / `full_valuation(code)` | 前向PE / PE消化时间 / PEG / 单票估值全景 | 本地计算 |
 
 ## 数据源优先级 & 东财防封（重要，先读）
@@ -224,8 +231,9 @@ ETF期权层 (V3.3 新增)
 - 用户要看**市场热度 / 人气榜**（同花顺热榜 / 东财人气榜 / 个股概念命中）
 - 用户要看新闻资讯（个股新闻 / 财联社快讯 / 全球资讯）
 - 用户要查公告（巨潮公告全文）
+- 用户要算技术指标（MACD / KDJ / RSI / 布林带 / 多周期均线，基于 K 线本地计算）
 - 用户要做产业链调研 / 批量横向对比
-- 关键词：估值、一致预期、机构预测、市盈率、PEG、市值、研报、产业链、行业研究、K线、盘口、公告、新闻、**强势股、题材、热点、概念归因、北向资金、沪股通、深股通、概念板块、资金流向、主力、龙虎榜、席位、营业部、全市场龙虎榜、净买入、解禁、限售、行业对比、行业轮动、融资融券、两融、大宗交易、股东户数、筹码集中、分红、派息、送股、指数、ETF、涨停、打板、连板、炸板、跌停、涨停原因、封板、晋级率、ETF期权、希腊字母、隐含波动率、互动易、投资者关系、热榜、人气榜、市场热度**
+- 关键词：估值、一致预期、机构预测、市盈率、PEG、市值、研报、产业链、行业研究、K线、盘口、公告、新闻、**强势股、题材、热点、概念归因、北向资金、沪股通、深股通、概念板块、资金流向、主力、龙虎榜、席位、营业部、全市场龙虎榜、净买入、解禁、限售、行业对比、行业轮动、融资融券、两融、大宗交易、股东户数、筹码集中、分红、派息、送股、指数、ETF、涨停、打板、连板、炸板、跌停、涨停原因、封板、晋级率、ETF期权、希腊字母、隐含波动率、互动易、投资者关系、热榜、人气榜、市场热度、技术指标、MACD、KDJ、RSI、布林带、均线、金叉、死叉、超买超卖**
 
 ---
 
@@ -2386,6 +2394,138 @@ print("人气第一:", hot[0]["name"], "概念命中:", em_hot_concept(hot[0]["c
 ```
 
 > **坑：** ① 东财人气榜 `getAllCurrentList` 只返回带前缀代码（SZ/SH），名称要再走 `ulist.np` 补（`SZ`→`0.`、`SH`→`1.`）。② `ulist.np` 的 `diff` 偶尔是 dict（按序号为键），已做 `list(values())` 归一化。③ 同花顺热榜 `type` 可选 `hour`/`day`。
+
+---
+
+## Layer 11: 技术指标层（本地计算）
+
+纯本地计算，**不新增数据源、不发任何指标类网络请求**：复用行情层（§1.1 mootdx）的 K 线，用 `stockstats`（Prerequisites 依赖表已列，注释「技术指标计算（RSI/MACD/BOLL等）」，此前没有任何函数用它，本层补上）封装成显式的内嵌函数，产出 MACD/KDJ/RSI/布林带/多周期均线等常用指标。
+
+> ⚠️ **复权警示（重要，与 §1.1 一致）：** mootdx `bars` 返回**不复权**原始价（通达信原始数据，无 adjust 参数）。跨除权除息日计算 MACD/KDJ/布林带等会失真——除权跳空会被指标当成真实价格波动。跨除权日请改用带前复权的日 K 数据源（腾讯财经 §1.2 / 百度股市通 §1.3）后，按同样的小写 `open/high/low/close/volume` 列名喂给 stockstats。
+
+> **stockstats 版本兼容：** 新版（≥0.4）用 `stockstats.wrap(df)`，老版本用 `StockDataFrame.retype(df)`；下方 `_stockstats_wrap()` 已做兼容。stockstats 要求列名为小写 `open/high/low/close/volume`——mootdx 的 `vol` 需重命名为 `volume`，否则量价类指标取不到列。
+
+### 11.1 technical_indicators — MACD / KDJ / RSI / 布林带 / 均线
+
+```python
+import re
+import pandas as pd
+import stockstats
+
+# stockstats 新旧版本 API 兼容：0.4+ 提供 wrap()，老版本用 StockDataFrame.retype()。
+def _stockstats_wrap(df):
+    """把普通 DataFrame 包成 stockstats 对象，兼容新旧版本 API。"""
+    if hasattr(stockstats, "wrap"):
+        return stockstats.wrap(df)                       # 新版
+    return stockstats.StockDataFrame.retype(df)          # 旧版
+
+# 默认指标清单（stockstats 列名约定）。用户点名的 MACD/KDJ/RSI/布林带/MA 全覆盖，
+# 另附 dma/atr/cci 三个常见量。
+_DEFAULT_INDICATORS = [
+    "macd", "macds", "macdh",                 # MACD：DIF / DEA(信号线) / 柱状(macd-macds)
+    "kdjk", "kdjd", "kdjj",                   # KDJ 随机指标
+    "rsi_6", "rsi_12", "rsi_24",             # RSI 相对强弱（三周期）
+    "boll", "boll_ub", "boll_lb",            # 布林带 中轨/上轨/下轨
+    "close_5_sma", "close_10_sma",           # 均线 MA5/MA10
+    "close_20_sma", "close_60_sma",          # 均线 MA20/MA60
+    "dma", "atr", "cci",                      # 平行线差 / 真实波幅 / 顺势指标
+]
+
+def technical_indicators(code, frequency=9, offset=120, indicators=None):
+    """
+    技术指标计算层（纯本地计算，不新增数据源、不发指标类网络请求，只消费 mootdx K 线）。
+
+    用 §1.1 的 tdx_client().bars() 取 K 线，喂给 stockstats 计算 MACD/KDJ/RSI/布林带/均线
+    等指标，返回最近若干行的结构化 dict 列表（每行含 datetime、OHLCV 与所选指标值）。
+
+    参数：
+      code        6 位代码或带前缀/后缀格式（SH600519 / 600519.SH 均可，内部取纯 6 位）。
+      frequency   K 线周期，同 mootdx bars（9=日线默认，5=周线，3=60分钟…见 §1.1 频率值表）。
+      offset      取多少根 K 线；指标要足够长的窗口才收敛（MACD≈34、boll=20、rsi_24≈24），
+                  建议 ≥120 以保证末行指标稳定，默认 120。
+      indicators  要算的 stockstats 指标名列表；None 时用 _DEFAULT_INDICATORS。
+
+    返回：最近 min(offset, 30) 行的 dict 列表；取数或计算失败返回 []（并打 [WARN]）。
+
+    ⚠️ 复权警示（与 §1.1 一致，重要）：mootdx bars 返回【不复权】原始价，跨除权除息日
+       计算 MACD/KDJ/布林带等会失真（除权跳空被当成真实波动）。跨除权日请改用带前复权的
+       日 K 数据源（腾讯财经 §1.2 / 百度股市通 §1.3）后，再按同样列名喂给 stockstats。
+    """
+    inds = list(indicators) if indicators else list(_DEFAULT_INDICATORS)
+    m = re.search(r"\d{6}", str(code))          # 归一化到纯 6 位（见「Ticker 格式归一化」）
+    if not m:
+        print(f"[WARN] technical_indicators 非法代码: {code}")
+        return []
+    sym = m.group(0)
+
+    try:
+        df = tdx_client().bars(symbol=sym, frequency=frequency, offset=offset)
+    except Exception as e:
+        print(f"[WARN] technical_indicators 取 K 线失败({sym}): {e}")
+        return []
+    if df is None or len(df) == 0:
+        print(f"[WARN] technical_indicators 无 K 线数据({sym})；海外网络 mootdx 常返回空，见 §1.1 海外提示")
+        return []
+
+    # 列名归一化到 stockstats 约定：小写 open/high/low/close/volume。
+    # mootdx bars 列为 open/close/high/low/vol/amount/datetime —— vol 需改名 volume。
+    df = df.rename(columns={c: str(c).lower() for c in df.columns})
+    if "vol" in df.columns and "volume" not in df.columns:
+        df = df.rename(columns={"vol": "volume"})
+    need = {"open", "high", "low", "close"}
+    missing = need - set(df.columns)
+    if missing:
+        print(f"[WARN] technical_indicators K 线缺列 {missing}({sym})")
+        return []
+    df = df.reset_index(drop=True)
+
+    sdf = _stockstats_wrap(df.copy())
+    for ind in inds:
+        try:
+            sdf[ind]                 # 触发 stockstats 惰性计算并写回同名列
+        except Exception as e:
+            print(f"[WARN] 指标 {ind} 计算失败({sym}): {e}")
+
+    base_cols = [c for c in ("datetime", "open", "high", "low", "close", "volume") if c in sdf.columns]
+    keep = base_cols + [c for c in inds if c in sdf.columns]
+    out = []
+    for _, row in sdf.tail(min(offset, 30)).iterrows():
+        rec = {}
+        for c in keep:
+            v = row.get(c)
+            if c == "datetime":
+                rec[c] = str(v)
+                continue
+            try:
+                rec[c] = None if pd.isna(v) else round(float(v), 4)
+            except (TypeError, ValueError):
+                rec[c] = v
+        out.append(rec)
+    return out
+
+# 用法：打印某只票最近几日的 MACD 金叉/死叉、RSI 超买超卖、是否触及布林带上下轨
+rows = technical_indicators("688017", frequency=9, offset=120)
+prev = None
+for r in rows[-5:]:
+    dif, dea, hist = r.get("macd"), r.get("macds"), r.get("macdh")
+    cross = ""
+    if prev and prev.get("macd") is not None and dif is not None:
+        if prev["macd"] <= prev["macds"] and dif > dea:
+            cross = "  ← MACD金叉"
+        elif prev["macd"] >= prev["macds"] and dif < dea:
+            cross = "  ← MACD死叉"
+    rsi6 = r.get("rsi_6")
+    rsi_tag = (" 超买" if rsi6 >= 80 else (" 超卖" if rsi6 <= 20 else "")) if rsi6 is not None else ""
+    c, ub, lb = r.get("close"), r.get("boll_ub"), r.get("boll_lb")
+    boll_tag = ""
+    if None not in (c, ub, lb):
+        boll_tag = " 触布林上轨" if c >= ub else (" 触布林下轨" if c <= lb else "")
+    print(f"{r.get('datetime')} close={c} DIF={dif} DEA={dea} 柱={hist}{cross}"
+          f"  RSI6={rsi6}{rsi_tag}  KDJ_J={r.get('kdjj')}{boll_tag}")
+    prev = r
+```
+
+> **指标速记：** MACD `macd`=DIF、`macds`=DEA(信号线)、`macdh`=柱状(=DIF−DEA，stockstats 0.6 口径)；KDJ `kdjk/kdjd/kdjj`；RSI `rsi_6/rsi_12/rsi_24`（0–100，>80 超买 <20 超卖）；布林带 `boll`(中轨=MA20)/`boll_ub`(上轨)/`boll_lb`(下轨)；均线 `close_5_sma`…`close_60_sma`。想加别的指标（如 `wr_10`、`trix`、`vr`、`cr`）直接塞进 `indicators=[...]`，stockstats 会惰性计算并写回同名列。
 
 ---
 

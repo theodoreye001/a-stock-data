@@ -1,5 +1,25 @@
 # Changelog
 
+## v3.5.0 — 2026-07-12
+
+新增技术指标计算层（纯本地计算）。**端点 43 → 44，层数 10 → 11（单列「技术指标层」），数据源不变（15，本层不新增数据源、不发网络请求）。**
+
+### 新增：Layer 11 技术指标层（本地计算）
+- **§11.1 `technical_indicators(code, frequency=9, offset=120, indicators=None)`**：把 `stockstats`（Prerequisites 依赖表早已列，注释「技术指标计算（RSI/MACD/BOLL等）」，此前无任何函数使用）封装成显式内嵌函数——**纯本地计算层，不新增数据源、不发指标类网络请求**，复用 §1.1 `tdx_client().bars()` 的多周期 K 线，一次算全常用指标并返回最近若干行的结构化 dict 列表。
+- **覆盖指标**：MACD（`macd`/`macds`/`macdh`）、KDJ（`kdjk`/`kdjd`/`kdjj`）、RSI（`rsi_6`/`rsi_12`/`rsi_24`）、布林带（`boll`/`boll_ub`/`boll_lb`）、多周期均线（`close_5/10/20/60_sma`），另附 `dma`/`atr`/`cci`。
+- **stockstats 新旧版本兼容**：`_stockstats_wrap()` 自动适配新版 `stockstats.wrap(df)` / 旧版 `StockDataFrame.retype(df)`；并把 mootdx 的 `vol` 列归一化为 stockstats 要求的小写 `volume`（列名统一 `open/high/low/close/volume`）。
+- **复权失真警示（与 §1.1 一致）**：mootdx `bars` 返回**不复权**原始价，跨除权除息日计算 MACD/KDJ/布林带等会失真（除权跳空被当成真实波动）→ 跨除权日建议改用带前复权的日 K 数据源（腾讯财经 §1.2 / 百度股市通 §1.3）后再计算。
+- 代码风格对齐现有实现：中文 docstring、返回结构化 dict、解析失败打 `[WARN]` 而非静默吞异常。
+
+### 文档同步
+- **架构树**新增「技术指标层（本地计算）」一层；**端点路由速查总表**新增 `11.1 technical_indicators` 一行（源=本地计算）。
+- **When to Activate** 补「用户要算 MACD/KDJ/RSI/布林带等技术指标」及关键词；frontmatter `description` 补技术指标关键词，`version` 3.4.0 → 3.5.0，顶部新增 V3.5.0 亮点。
+- README.md 中英架构图 / 端点清单 / 亮点区同步；所有「43 端点 / 10 层」计数措辞更新为「44 端点 / 11 层」（数据源保持 15）。
+
+### 测试（真实数据 smoke test）
+- §11.1 代码块 `py_compile` 通过，空 K 线走 `[WARN]` 分支不崩。
+- 用 600519 / 688017 真实日 K 跑通 `technical_indicators`：RSI 落在 0–100、布林带上下轨包住收盘价、`macdh = macd − macds`、均线量级合理；688017 检出 2026-07-09 MACD 死叉。
+
 ## v3.4.0 — 2026-07-11
 
 接口质量修复 + 备用源韧性层。**端点 40 → 43（新增 3 个官方备胎函数），数据源 13 → 15（新增沪深交易所官方），层数 10 不变。**

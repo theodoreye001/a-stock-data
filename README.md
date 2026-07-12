@@ -1,9 +1,15 @@
 # a-stock-data
 
-A 股全栈数据工具包 — 7 层架构 · 28 个端点 · 13 个数据源 · 零第三方数据封装依赖
+A 股全栈数据工具包 — 10 层架构 · 43 个端点（40 主端点 + 3 官方备胎）· 15 个数据源 · 零第三方数据封装依赖
 
-一个自包含的 Skill 文件，把分散在 13 个数据源里的 A 股原始数据整合成 AI 编程助手直接能用的工具集。你不用再背 mootdx 的 K 线参数、东财的 PDF Referer 头、iwencai 的 X-Claw 鉴权——全部封装好了。
+一个自包含的 Skill 文件，把分散在 15 个数据源里的 A 股原始数据整合成 AI 编程助手直接能用的工具集。你不用再背 mootdx 的 K 线参数、东财的 PDF Referer 头、iwencai 的 X-Claw 鉴权——全部封装好了。主源被封还有「备用源速查」可降级。
 
+> **V3.4.0 接口质量 + 备用源韧性（2026-07-11）：** ① **财联社快讯复活**（#14 收口）——官方 v1 API + 本地签名（`md5(sha1(排序query))`，零 key），V3.2 移除的全市场电报能力恢复，与东财 7×24 互备；② **新增「备用源速查 & 降级策略」**——十层主源→独立备胎速查表 + 3 个官方备胎函数（沪深交易所官方龙虎榜 / 新浪资金流 / 深交所官方+东财公告），东财被封时不同风控面即时降级；③ **两个实测坐实的 bug 修复**——解禁接口东财改列名致 type/shares 恒空（改新列名 + 增 able_shares）、行业排名缺 `fid=f3` 致 top/bottom 非按涨幅排序；④ **深股通标注**——北向盘中披露收紧后 sgt 分钟序列不可靠，权威北向指向 HKEX 官方；⑤ **端点路由速查总表**——60+ 函数首次一页总览，agent 可按需局部读取。端点 40→43，数据源 13→15。
+>
+> **V3.3.0 新增三层（2026-06-28）：** ① **打板层**（#23 / #15）——东财涨停 / 炸板 / 跌停 / 昨日涨停四池 + 同花顺涨停揭秘（涨停原因题材 / 封板成功率）+ 打板情绪速算（炸板率 / 连板梯队）；② **ETF 期权层**（#13）——50ETF / 300ETF 等期权 T型报价 + 希腊字母 + 隐含波动率（新浪源，免本地算 BSM）；③ **舆情互动层**——互动易问答（公司如何回应投资者）+ 同花顺热榜 + 东财人气榜 + 个股概念命中。另显式补充 ETF 支持说明。端点 28→40，层数 7→10。
+>
+> **V3.2.5 修复（2026-06-28 · #31 / #28）：** ① **分钟 K 线参数 Bug（CRITICAL）**——`bars()` 参数名误写 `category`（实为 `frequency`），被 `**kwargs` 静默吞掉、永远退化成日线，分钟/周/月线全取不到 → 改正参数名 + 按源码重写频率值表 + 补 1分钟/5分钟示例；② **复权口径**——mootdx `bars` 返回**不复权**原始价，补跨除权日须自行复权的警示；③ **`full_valuation` EPS 取错列**——旧 `iloc[2]` 取的是同花顺「最小值」而非「均值＝机构一致预期EPS」，致 PE_fwd/PEG 系统性偏差 → 改按列名取；④ `em_get()` 加连接级自动重试。
+>
 > **V3.2.4 修复（2026-06-20 · #26）：** **mootdx 0.11.x 全新安装 BESTIP 空串崩溃**——干净环境裸调 `Quotes.factory()` 抛 `ValueError: not enough values to unpack`（老用户 config 已填 IP 不触发，故易漏测）。新增 `tdx_client()` helper（TCP 探测可用服务器 + 三级 fallback）统一替换 4 处 mootdx 调用，对 0.10/0.11 通用、不锁版本（锁 0.10.12 反而在部分 Python 下 import 崩）。
 >
 > **V3.2.3 新增（2026-06-20）：** **行业研报**——研报层补上东财行业研报端点 `eastmoney_industry_reports()`，与个股研报同端点（仅 `qType=1`），支持全行业拉取或按东财行业码精确过滤，PDF 复用现有 `download_pdf()`。端点数 27 → 28。
@@ -25,17 +31,22 @@ A 股全栈数据工具包 — 7 层架构 · 28 个端点 · 13 个数据源 ·
 ## 架构
 
 ```
-A 股全栈数据 · 七层架构 · V3.2.4
+A 股全栈数据 · 十层架构 · V3.4.0
 │  （优先级：mootdx/腾讯 不封IP 优先用；东财仅用于独有数据，已内置限流防封）
 ├── 行情层    mootdx + 腾讯财经 + 百度K线   K线(带MA5/10/20) + 五档盘口 + PE/PB/市值 + 指数/ETF
 ├── 研报层    东财 reportapi + 同花顺 + iwencai  个股研报 / 行业研报 / PDF下载 / 一致预期 / NL搜索
 ├── 信号层    同花顺 + 东财                  强势股 + 题材归因 + 北向资金 + 板块归属
 │                                           + 资金流向(push2) + 龙虎榜 + 全市场龙虎榜 + 解禁 + 行业对比
 ├── 资金面    东财 datacenter + push2        融资融券 + 大宗交易 + 股东户数 + 分红送转 + 资金流(分钟+120日)
-├── 新闻层    东财（直连HTTP）              个股新闻 / 全球资讯（财联社快讯已下线）
+├── 新闻层    东财 + 财联社                  个股新闻 / 财联社电报(✅V3.4复活) / 全球资讯（互备）
 ├── 基础数据  mootdx + 东财 + 新浪           季报37字段 / F10九大类 / 财报三表
-└── 公告层    巨潮 cninfo + mootdx           沪深北全量公告
+├── 公告层    巨潮 cninfo + mootdx           沪深北全量公告
+├── 打板层    东财 push2ex + 同花顺          涨停池 / 炸板 / 跌停 / 昨涨停 / 涨停原因题材 / 连板梯队  ★V3.3
+├── 期权层    新浪 hq.sinajs                ETF期权 T型报价 / 希腊字母 / 隐含波动率 IV  ★V3.3
+└── 舆情互动  巨潮互动易 + 同花顺 + 东财     互动易问答 / 同花顺热榜 / 东财人气榜 / 概念命中  ★V3.3
 ```
+
+> ★V3.4 十层之外另附**备用源速查 & 降级策略**：沪深交易所官方 + 新浪 + HKEX——龙虎榜/资金流/公告官方备胎函数 + 各层降级速查表，主源被封时用（见 SKILL.md 对应章节）。
 
 ---
 
@@ -61,7 +72,9 @@ pip install mootdx requests pandas stockstats
 
 ---
 
-## 28 个端点能力清单
+## 43 个端点能力清单
+
+> **计数口径：** 下方清单共 45 行，按端点计 43 个——「东财 行业研报」与「东财 reportapi」为**同一端点**（仅 `qType` 参数不同），「同花顺北向（历史）」为本地自缓存（非独立端点），两行不重复计数。
 
 ### 行情层（实时，不封 IP）
 
@@ -86,7 +99,7 @@ pip install mootdx requests pandas stockstats
 | 端点 | 数据 |
 |------|------|
 | 同花顺热点 | 当日强势股 + 题材归因 reason tags（编辑部人工标注） |
-| 同花顺北向（实时） | 沪股通 / 深股通分钟级流向（262 个时间点） |
+| 同花顺北向（实时） | 沪股通分钟级流向（深股通近期上游披露收紧仅供参考，权威北向见 HKEX 备胎） |
 | 同花顺北向（历史） | 本地自缓存日级历史 |
 | 东财板块归属 | 个股所属全部板块（行业/概念/地域混合）+ BK码 + 当日涨跌幅 + 龙头股（V3.2.2 替换百度 PAE，一次请求拿全）|
 | **东财资金流向** | 主力 / 大单 / 中单 / 小单 / 超大单分钟级净流入（V3.1 替换百度 PAE） |
@@ -110,7 +123,7 @@ pip install mootdx requests pandas stockstats
 | 端点 | 数据 |
 |------|------|
 | 个股新闻 | 东财个股新闻流（直连 search-api-web） |
-| ~~财联社快讯~~ | ⚠️ 已下线（cls.cn 迁 Next.js，旧 API 404，#14）→ 用全球资讯替代 |
+| 财联社电报 | 全市场实时快讯（v1 API + 本地签名零 key，✅V3.4.0 复活，与全球资讯互备） |
 | 全球资讯 | 东财全球财经资讯（直连 np-weblist，7×24） |
 
 ### 基础数据 + 公告
@@ -122,6 +135,43 @@ pip install mootdx requests pandas stockstats
 | 东财个股信息 | 行业/总股本/流通股/市值/上市日期（直连 push2） |
 | 新浪财报三表 | 资产负债表/利润表/现金流量表（直连 quotes.sina.cn） |
 | 巨潮公告 | 沪深北交所全量公告 |
+
+### 打板层（V3.3 新增）
+
+| 端点 | 数据 |
+|------|------|
+| 东财涨停池 | 连板数 / 几天几板 / 封板资金 / 炸板次数 / 首末封板时间 / 所属行业 |
+| 东财炸板池 | 曾涨停后开板 + 振幅 / 涨速 |
+| 东财跌停池 | 封单资金 / 连续跌停天数 / 开板次数 / 板上成交额 |
+| 东财昨日涨停池 | 昨涨停今表现（自算晋级率 / 赚钱效应） |
+| 同花顺涨停揭秘 | 涨停原因题材 / 封板成功率 / 一字·换手·T字板 / 封单额 |
+
+### ETF 期权层（V3.3 新增）
+
+| 端点 | 数据 |
+|------|------|
+| 期权合约清单 | 50ETF / 300ETF / 科创50ETF / 500ETF 各月份认购认沽合约 |
+| T型报价 | 买卖五档 / 持仓量 / 行权价 / 最新价 / 成交量额 |
+| 希腊字母 + IV | Delta / Gamma / Theta / Vega / 隐含波动率 / 理论价值（交易所预算，免本地算 BSM） |
+
+### 舆情互动层（V3.3 新增）
+
+| 端点 | 数据 |
+|------|------|
+| 互动易问答 | 投资者提问 + 公司官方回复（AI 问答独家信源：公司如何回应某传闻/利好） |
+| 同花顺热榜 | 人气值 / 概念标签 / 排名变化 |
+| 东财人气榜 | 排名 + 排名变化 + 名称价格 |
+| 东财个股概念命中 | 这只票当下被市场归到哪些概念在炒 + 热度值 |
+
+### 备用源（V3.4 新增 · 主源被封时降级）
+
+| 端点 | 数据 |
+|------|------|
+| 官方龙虎榜备胎 | 上交所 + 深交所官方接口，零鉴权权威一手，含营业部席位（东财被封时用） |
+| 资金流备胎 | 新浪日度四档单净额（超大/大/中/小单 + 净流入） |
+| 公告备胎 | 深市走深交所官方、沪市走东财，均带 PDF 直链（巨潮被封时用） |
+
+> 另附**十层主源 → 独立备胎速查表**（交易所官方 / 同花顺 F10 / HKEX / 巨潮 webapi / 金十等，全部不同风控面）与「已死透别用」名单，见 SKILL.md「备用源速查 & 降级策略」章节。
 
 ### 鉴权要求
 
@@ -149,7 +199,14 @@ pip install mootdx requests pandas stockstats
 | 大宗交易 | 「这只票最近有没有大宗交易，溢价还是折价」 |
 | 股东户数 | 「000858 股东户数在增加还是减少，筹码集中吗」 |
 | 分红送转 | 「茅台历年分红派息多少」 |
+| **ETF 行情** | 「510050 上证50ETF 现在什么价、今天涨跌多少」 |
+| **涨停打板** | 「今天涨停多少家、最高几连板、炸板率多少」 |
+| **涨停归因** | 「今天涨停的票都是什么题材，哪些是几天几板」 |
+| **ETF 期权** | 「50ETF 平值期权的隐含波动率和 Delta 是多少」 |
+| **互动易** | 「比亚迪最近投资者都在问什么，公司怎么回应的」 |
+| **市场热度** | 「今天哪些票最热门，被归到什么概念在炒」 |
 | 新闻公告 | 「拉一下 300476 最近的新闻和公告」 |
+| **市场快讯** | 「用财联社电报看看现在市场上有什么大新闻」 |
 | 批量对比 | 「帮我对比这 5 只半导体股的估值」 |
 
 ### 内置 4 套调研流程
@@ -163,26 +220,20 @@ pip install mootdx requests pandas stockstats
 
 ---
 
-## V3.2.4 亮点
+## V3.4.0 亮点
 
 | 变化 | 说明 |
 |------|------|
-| **mootdx 0.11.x 兼容（#26 / PR #7）** | 全新安装裸调 `Quotes.factory()` 因 `BESTIP.HQ` 空串抛 `ValueError` → 新增 `tdx_client()` helper：TCP 探测内置可用服务器列表，用显式 `server=(ip,port)` 绕过 BESTIP，三级 fallback（bestip 测速→裸 factory→明确报错）防 IP 老化/换网。4 处 mootdx 调用统一改走它 |
-| **不锁 mootdx 版本（决策）** | 锁 `0.10.12` 在干净 Python 3.9 下 `import` 即崩（numpy/pandas 二进制不兼容），比 0.11.x 更糟 → 依赖保持 `>=0.10`，靠 helper 而非锁版本解决兼容 |
+| **财联社快讯复活（#14 收口）** | 2026-05 死的是旧 `nodeapi` 系接口；官方新版 `v1/roll/get_roll_list` 一直可用，只是强制 `sign` 校验——sign 纯本地可算（`md5(sha1(按 key 字典序拼接的 query 串))`），零 key。全市场电报能力恢复，与东财 7×24 互为独立备份（不同源、不同风控面） |
+| **备用源速查 & 降级策略（新增章节）** | 十层主源→独立备胎速查表（交易所官方 / 新浪 / 同花顺 F10 / HKEX / 巨潮 webapi / 金十，全部不同域名不同风控面）+「已死透别用」名单。东财 IP 级风控成片失联时即时降级 |
+| **3 个官方备胎函数** | `dragon_tiger_backup()`（沪深交易所官方龙虎榜，零鉴权权威一手，含营业部席位）、`fund_flow_backup()`（新浪日度四档单净额）、`announcements_backup()`（深市深交所官方 / 沪市东财，均带 PDF 直链）。全部 2026-07-11 真实数据实测 |
+| **解禁接口字段修复** | 东财 `RPT_LIFT_STAGE` 改列名致 `type`/`shares` 恒空 → 改 `FREE_SHARES_TYPE`/`FREE_SHARES`，新增 `able_shares`（实际可流通股数，更贴近真实抛压） |
+| **行业排名排序修复** | clist 请求缺排序字段，top/bottom 切片并非按涨幅排序 → 补 `fid=f3`，现按涨跌幅真实降序 |
+| **深股通标注** | 北向盘中披露收紧后 sgt 分钟序列不可靠（hgt 可用），权威北向用 HKEX 官方日统计（备胎表内） |
+| **端点路由速查总表** | § → 函数 → 用途 → 源，60+ 内嵌函数首次一页总览；agent 可按表定位章节局部读取，不必通读全文 |
+| **端点 40 → 43，数据源 13 → 15** | 新增沪深交易所官方两个一手信源；FAQ 新增东财被封三步处理 / 财联社复活 / mootdx 库烂尾说明 |
 
-## V3.2.3 亮点
-
-| 变化 | 说明 |
-|------|------|
-| **行业研报端点（新增）** | 研报层补上东财行业研报 `eastmoney_industry_reports()`，与个股研报同端点（仅 `qType=1`），`industry_code="*"` 拉全行业、传东财行业码（如 `1238`=IT服务Ⅱ）精确过滤，PDF 复用 `download_pdf()`，走 `em_get` 限流。端点数 27 → 28 |
-| **概念板块归属换源（#18）** | 百度 PAE `getrelatedblock` 失效（`ResultCode 10003`）→ 改用东财 `slist`，一次请求拿全个股所属板块（行业/概念/地域 + BK码 + 涨跌幅 + 龙头股），零鉴权走 `em_get` 限流 |
-| **巨潮公告 orgId 动态化（#19）** | 硬编码 `gssx0{code}` 导致大量 601xxx 股票（平安/工行/中石油等）查不到公告 → 动态查官方映射表 `szse_stock.json`（6198 只股，模块级缓存），硬编码降为 fallback |
-| **修复综合示例隐藏崩溃** | 示例仍调用 v3.1 已删除的 `baidu_fund_flow_history` → 改为 `eastmoney_fund_flow_minute` |
-| **大陆住宅 IP 风控说明** | §4.5 资金流 / §5.1 新闻 加 ⚠️：部分大陆住宅 IP 会被东财间歇风控（`HTTP 000`/空），非代码问题，重试或换网络即可 |
-| **数据源优先级原则**（V3.2 起） | 明确「能用通达信(mootdx)/腾讯就别用东财」——前两者 TCP/HTTP 实测不封 IP，可放心高频；东财仅用于其独有数据 |
-| **东财统一限流防封** | 新增节流入口 `em_get()`，所有东财端点（datacenter/push2/reportapi/search/np-weblist）改用它，内置串行限流（间隔≥1s+随机抖动）+ 会话复用，批量抄代码即自带防封 |
-| **东财风控阈值文档化** | SKILL 新增「数据源优先级 & 东财防封」章节，列出触发封禁的阈值（每秒>5/并发≥10/1分≥200/5分≥300）与防封铁律 |
-| **财联社快讯下线（#14）** | `cls.cn` 旧 API 全面 404，标注弃用，改用东财全球资讯 |
+> 历史版本亮点见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ---
 
@@ -203,10 +254,24 @@ pip install mootdx requests pandas stockstats
 | **末位（仅独有数据）** | **东财** datacenter/push2/reportapi/search/np-weblist | HTTP | **中 — 有风控会封 IP** | 龙虎榜/解禁/两融/大宗/股东户数/分红/资金流/研报/个股新闻/全球资讯（已统一走 `em_get()` 限流） |
 
 > **架构原则：** 除 mootdx（TCP 二进制协议）外，全部直连 HTTP API，零第三方数据封装依赖。**东财系接口有访问频率风控，所有调用统一经 `em_get()` 串行限流防封；批量任务请调大 `EM_MIN_INTERVAL`。**
+>
+> **降级原则（V3.4 新增）：** 任一主源被封/失效时，查 SKILL.md「备用源速查 & 降级策略」——每类数据都备有一条**不同域名、不同风控面**的独立备胎（沪深交易所官方 / 新浪 / 同花顺 / HKEX），东财被封时它们不受牵连。
 
 ---
 
 ## FAQ
+
+**Q: SKILL.md 这么大，agent 每次加载很费 token？**
+单文件自包含是本项目的**有意产品决策**——拷一个文件就能用、离线可携、便于分发，这个形态会长期保持，不做目录化拆分（相关讨论见 #21 / #22 / #29）。两个降耗建议：① v3.3.1 起 description 已收窄触发范围，无需取数的 A 股话题不会再误加载整个文件；② token 敏感的用户可以不把它装成自动触发 skill，改为放进项目目录、需要取数时让 agent 按需读取——文件按十层组织、章节标题清晰，v3.4.0 起顶部还有「端点路由速查」总表（§→函数→用途→源），agent 按表定位后只读对应层，通常只花几 K token。
+
+**Q: 东财接口 403 / 连接重置，是被封了怎么办？**
+东财系接口（datacenter/push2/push2ex/reportapi/search/np-weblist）共用同一套风控，IP 被封会成片失联。三步：① 停止请求等 30-60 分钟（IP 级临时封通常自动解除），或换网络（手机热点）立刻恢复；② 长批任务确认全部走 `em_get()` 并调大 `EM_MIN_INTERVAL`；③ 数据不能等 → 用 SKILL.md「备用源速查 & 降级策略」的独立备胎（交易所官方/新浪/同花顺，不同风控面）。
+
+**Q: 财联社快讯不是 V3.2 标注下线了吗？**
+已复活（V3.4.0）。2026-05 死的是旧 `nodeapi` 系接口；官方新版 `v1/roll/get_roll_list` 一直可用，只是强制 `sign` 校验——sign 纯本地可算（`md5(sha1(按 key 字典序拼接的 query 串))`），零 key。与东财 7×24 全球资讯互为独立备份。
+
+**Q: mootdx 库听说停更了，还能用吗？**
+库确实烂尾（最后 commit 2024-07，BESTIP bug 无官方修复），但**通达信 TCP 协议本身照常运行**——烂尾的是封装库，不是数据源。内置的 `tdx_client()` 已绕开 BESTIP bug，继续用没问题；若未来装不上，社区活跃替代是 easy_tdx（同协议）。
 
 **Q: mootdx 和腾讯有什么区别？**
 互补。mootdx = 交易层（价格 + 盘口 + K 线），腾讯 = 估值层（PE / PB / 市值 / 换手率 / 涨跌停价）。两者都不封 IP。
@@ -284,10 +349,16 @@ V2.1 改为本地自缓存。每次调用自动积累，越跑越丰富。首次
 
 # a-stock-data
 
-Full-stack data toolkit for China A-Share market — 7-layer architecture · 28 endpoints · 13 data sources · zero third-party data wrapper dependencies
+Full-stack data toolkit for China A-Share market — 10-layer architecture · 43 endpoints (40 primary + 3 official backups) · 15 data sources · zero third-party data wrapper dependencies
 
-A self-contained Skill file that consolidates raw A-share data from 13 sources into a ready-to-use toolkit for AI coding assistants. No need to memorize mootdx candlestick parameters, Eastmoney PDF Referer headers, or iwencai X-Claw authentication — it's all handled.
+A self-contained Skill file that consolidates raw A-share data from 15 sources into a ready-to-use toolkit for AI coding assistants. No need to memorize mootdx candlestick parameters, Eastmoney PDF Referer headers, or iwencai X-Claw authentication — it's all handled. And when a primary source bans you, there's a backup-source quick reference to fall back on.
 
+> **V3.4.0 — endpoint quality + backup-source resilience (2026-07-11):** ① **Cailianpress flash revived** (#14 closed) — official v1 API + locally-computed signature (`md5(sha1(sorted query))`, zero key); the market-wide flash removed in V3.2 is back, an independent backup to Eastmoney 7×24. ② **New "backup sources & fallback" section** — a per-layer primary→backup table + 3 official backup functions (SSE/SZSE official dragon-tiger, Sina fund flow, SZSE-official + Eastmoney announcements) on different rate-limit planes, for instant fallback when Eastmoney bans your IP. ③ **Two verified bug fixes** — lockup-expiry columns renamed upstream leaving `type`/`shares` empty (new column names + `able_shares`), and industry ranking missing `fid=f3` so top/bottom weren't sorted by change. ④ **Shenzhen Connect caveat** — sgt minute series unreliable after the disclosure tightening; authoritative northbound now points to HKEX official. ⑤ **Endpoint routing table** — first one-page overview of 60+ functions for partial reads. Endpoints 40→43, data sources 13→15.
+>
+> **V3.3.0 — three new layers (2026-06-28):** ① **Limit-Up layer** (#23/#15) — Eastmoney limit-up/break/limit-down/prev-day pools + THS limit-up insight (reasons/seal rate) + sentiment quick-calc (break rate/board ladder); ② **ETF Options layer** (#13) — 50ETF/300ETF option T-quotes + Greeks + implied vol (Sina, no local BSM); ③ **Sentiment layer** — investor Q&A (how companies respond to investors) + THS hot list + EM popularity rank. Plus an explicit ETF-support note. Endpoints 28→40, layers 7→10.
+>
+> **V3.2.5 Fix (2026-06-28 · #31 / #28):** ① **Minute K-line parameter bug (CRITICAL)** — `bars()` used a non-existent param name `category` (the real one is `frequency`); it got silently swallowed by `**kwargs`, so `frequency` always defaulted to 9 (daily) and minute/weekly/monthly requests silently degraded to daily with no error. Fixed the param name, rewrote the frequency table from mootdx source, added 1-min/5-min examples. ② **Adjustment** — mootdx `bars` returns **unadjusted** raw prices; added a warning to adjust manually across ex-dividend dates. ③ **`full_valuation` read the wrong EPS column** — old `iloc[2]` picked the THS "min" column instead of "mean = consensus EPS", biasing PE_fwd/PEG → now picks by column name. ④ `em_get()` now has connection-level retry.
+>
 > **V3.2.4 Fix (2026-06-20 · #26):** **mootdx 0.11.x fresh-install BESTIP crash** — on a clean machine a bare `Quotes.factory()` throws `ValueError: not enough values to unpack` (existing users whose config already holds IPs never hit it, so it was easy to miss). Added a `tdx_client()` helper (TCP-probes a built-in server list + 3-level fallback) and routed all 4 mootdx calls through it; works on 0.10/0.11 with no version pin (pinning 0.10.12 actually crashes on import under some Pythons).
 >
 > **V3.2.3 New (2026-06-20):** **Industry reports** — added the Eastmoney industry-report endpoint `eastmoney_industry_reports()` to the research layer. Same endpoint as single-stock reports (only `qType=1`); pull all industries or filter by an Eastmoney industry code, PDF download reuses the existing `download_pdf()`. Endpoints 27 → 28.
@@ -309,17 +380,22 @@ A self-contained Skill file that consolidates raw A-share data from 13 sources i
 ## Architecture
 
 ```
-China A-Share Full-Stack Data · 7-Layer Architecture · V3.2.4
+China A-Share Full-Stack Data · 10-Layer Architecture · V3.4.0
 │  (Priority: prefer mootdx/Tencent — never IP-banned; Eastmoney only for exclusive data, with built-in throttling)
 ├── Market Data    mootdx + Tencent + Baidu K-line   Candlesticks (w/ MA5/10/20) + Order Book + PE/PB + Index/ETF
 ├── Research       Eastmoney + THS + iwencai          Stock reports / Industry reports / PDF / Consensus EPS / NL search
 ├── Signals        THS + Eastmoney                    Hot stocks + Sector attribution + Northbound flow
 │                                                     + Sector membership + Fund flow(push2) + Dragon Tiger + Lockup + Industry
 ├── Capital Flow   Eastmoney datacenter + push2       Margin trading + Block trades + Holder count + Dividends + Fund flow(min+120d)
-├── News           Eastmoney (direct HTTP)            Stock news / Global finance (CLS flash deprecated)
+├── News           Eastmoney + Cailianpress           Stock news / CLS flash (✅revived in V3.4) / Global finance (mutual backup)
 ├── Fundamentals   mootdx + Eastmoney + Sina          37-field quarterly + F10 9 categories + Financial statements
-└── Filings        cninfo + mootdx                    Full filings across SSE / SZSE / BSE
+├── Filings        cninfo + mootdx                    Full filings across SSE / SZSE / BSE
+├── Limit-Up       Eastmoney push2ex + THS            ZT/ZB/DT/prev-ZT pools / limit reasons / consecutive-board ladder  ★V3.3
+├── Options        Sina hq.sinajs                     ETF option T-quotes / Greeks / implied volatility  ★V3.3
+└── Sentiment      cninfo IRM + THS + Eastmoney       Investor Q&A / hot lists / popularity rank / concept hits  ★V3.3
 ```
+
+> ★V3.4 On top of the 10 layers there is now a **Backup Sources & Fallback Strategy** appendix: SSE/SZSE official + Sina + HKEX — official backup functions (dragon-tiger / fund flow / filings) + a per-layer fallback table for when a primary source bans you (see the corresponding SKILL.md section).
 
 ---
 
@@ -345,7 +421,9 @@ Launch Claude Code and say "Check the valuation of 688017" — the skill activat
 
 ---
 
-## 28 Endpoints
+## 43 Endpoints
+
+> **Counting convention:** the tables below have 45 rows but count as 43 endpoints — "Eastmoney Industry Reports" shares **the same endpoint** as "Eastmoney reportapi" (only the `qType` parameter differs), and "THS Northbound (historical)" is a local self-built cache (not a separate endpoint); neither is double-counted.
 
 ### Market Data (real-time, no IP ban)
 
@@ -370,7 +448,7 @@ Launch Claude Code and say "Check the valuation of 688017" — the skill activat
 | Endpoint | Data |
 |----------|------|
 | THS Hot Stocks | Today's strong stocks + sector attribution tags (editorial annotations) |
-| THS Northbound (real-time) | Shanghai/Shenzhen Connect minute-level flow (262 data points) |
+| THS Northbound (real-time) | Shanghai Connect minute-level flow (Shenzhen Connect unreliable since upstream disclosure tightening — see HKEX backup for authoritative data) |
 | THS Northbound (historical) | Local self-cached daily history |
 | Eastmoney Sector Membership | All sectors a stock belongs to (industry/concept/region mixed) + BK code + daily change + leading stock (V3.2.2, replaced Baidu PAE, one request) |
 | **Eastmoney Fund Flow** | Main / Large / Medium / Small / Super-large order minute-level net inflow (V3.1, replaced Baidu PAE) |
@@ -394,7 +472,7 @@ Launch Claude Code and say "Check the valuation of 688017" — the skill activat
 | Endpoint | Data |
 |----------|------|
 | Stock News | Eastmoney per-stock news (direct search-api-web) |
-| ~~CLS Flash~~ | ⚠️ Deprecated (cls.cn migrated to Next.js, old API 404, #14) → use Global News |
+| CLS Flash | Market-wide real-time flash (v1 API + local signature, zero key, ✅revived in V3.4.0, mutual backup with Global News) |
 | Global News | Eastmoney global finance news (direct np-weblist, 7×24) |
 
 ### Fundamentals + Filings
@@ -406,6 +484,43 @@ Launch Claude Code and say "Check the valuation of 688017" — the skill activat
 | Eastmoney Stock Info | Industry / total shares / float / market cap / listing date (direct push2) |
 | Sina Financial Statements | Balance sheet / Income statement / Cash flow (direct quotes.sina.cn) |
 | cninfo Filings | Full filings across all exchanges |
+
+### Limit-Up / Limit-Down (V3.3 new)
+
+| Endpoint | Data |
+|----------|------|
+| EM Limit-Up Pool | Consecutive boards / N-day-M-board / seal fund / break count / seal time / industry |
+| EM Break-Board Pool | Opened after limit-up + amplitude / speed |
+| EM Limit-Down Pool | Seal fund / consecutive limit-down / open count / board turnover |
+| EM Prev-Day Limit-Up Pool | Yesterday's limit-up performance today (promotion rate / profit effect) |
+| THS Limit-Up Insight | Limit reason themes / seal success rate / board type / seal amount |
+
+### ETF Options (V3.3 new)
+
+| Endpoint | Data |
+|----------|------|
+| Option Contract List | 50ETF / 300ETF / STAR50 ETF / 500ETF call & put contracts by month |
+| T-Quote | Bid/ask 5 levels / open interest / strike / last / volume |
+| Greeks + IV | Delta / Gamma / Theta / Vega / implied vol / theoretical value (exchange-computed, no local BSM) |
+
+### Sentiment & Interaction (V3.3 new)
+
+| Endpoint | Data |
+|----------|------|
+| Investor Q&A (IRM) | Investor questions + official company replies (unique source: how a company responds to rumors/news) |
+| THS Hot List | Popularity / concept tags / rank change |
+| EM Popularity Rank | Rank + rank change + name/price |
+| EM Stock Concept Hits | Which concepts the market is grouping this stock under + heat |
+
+### Backup Sources (V3.4 new · fallback when a primary source bans you)
+
+| Endpoint | Data |
+|----------|------|
+| Official Dragon-Tiger Backup | SSE + SZSE official APIs, zero-auth, authoritative first-party, incl. brokerage seats (when Eastmoney is banned) |
+| Fund Flow Backup | Sina daily 4-tier order net flow (super-large / large / medium / small + net inflow) |
+| Filings Backup | SZSE official for Shenzhen tickers, Eastmoney for Shanghai, both with direct PDF links (when cninfo is banned) |
+
+> Plus a **per-layer primary → independent-backup table** (exchange official / THS F10 / HKEX / cninfo webapi / Jin10 — all on different rate-limit planes) and a "confirmed dead" list — see the "Backup Sources & Fallback Strategy" section in SKILL.md.
 
 ### Authentication
 
@@ -433,7 +548,14 @@ Just tell your AI assistant:
 | Block Trades | "Any recent block trades for this stock, premium or discount" |
 | Shareholder Count | "Is 000858 shareholder count increasing or decreasing" |
 | Dividends | "How much has Moutai paid in dividends over the years" |
+| ETF Quote | "What's the price of 510050 (SSE 50 ETF) and today's change" |
+| Limit-Up Sentiment | "How many stocks hit limit-up today, highest consecutive boards, break rate" |
+| Limit-Up Themes | "What themes drove today's limit-ups, which are multi-day boards" |
+| ETF Options | "What's the implied vol and Delta of the at-the-money 50ETF option" |
+| Investor Q&A | "What are investors asking BYD recently and how did the company respond" |
+| Market Heat | "Which stocks are hottest today and what concepts are they grouped under" |
 | News & Filings | "Pull recent news and filings for 300476" |
+| Market Flash | "Any big market news right now on the CLS flash feed" |
 | Batch Compare | "Compare valuations of these 5 semiconductor stocks" |
 
 ### 4 Built-in Research Workflows
@@ -447,26 +569,20 @@ Just tell your AI assistant:
 
 ---
 
-## V3.2.4 Highlights
+## V3.4.0 Highlights
 
 | Change | Description |
 |--------|-------------|
-| **mootdx 0.11.x compat (#26 / PR #7)** | A bare `Quotes.factory()` crashes on a fresh install (`BESTIP.HQ` empty string → `ValueError`) → added a `tdx_client()` helper that TCP-probes a built-in server list and passes an explicit `server=(ip,port)` to bypass BESTIP, with a 3-level fallback (bestip probe → bare factory → explicit error) against IP aging. All 4 mootdx calls now route through it |
-| **No mootdx version pin (decision)** | Pinning `0.10.12` crashes on `import` under a clean Python 3.9 (numpy/pandas ABI mismatch) — worse than 0.11.x → dependency stays `>=0.10`, compat handled by the helper, not a pin |
+| **Cailianpress flash revived (#14 closed)** | What died in 2026-05 was the old `nodeapi` family; the official `v1/roll/get_roll_list` has been up all along, merely enforcing a `sign` — computable locally (`md5(sha1(query string sorted by key))`), zero key. Market-wide flash restored, an independent backup to Eastmoney 7×24 (different source, different rate-limit plane) |
+| **Backup-source quick reference & fallback strategy (new section)** | Per-layer primary → independent-backup table (exchange official / Sina / THS F10 / HKEX / cninfo webapi / Jin10 — all on different domains and rate-limit planes) + a "confirmed dead" list. Instant fallback when an Eastmoney IP-level ban takes out a whole batch |
+| **3 official backup functions** | `dragon_tiger_backup()` (SSE + SZSE official dragon-tiger board, zero-auth, authoritative, incl. brokerage seats), `fund_flow_backup()` (Sina daily 4-tier order net flow), `announcements_backup()` (SZSE official for Shenzhen tickers / Eastmoney for Shanghai, both with direct PDF links). All verified against live data on 2026-07-11 |
+| **Lockup-expiry field fix** | Eastmoney renamed columns in `RPT_LIFT_STAGE`, leaving `type`/`shares` permanently empty → switched to `FREE_SHARES_TYPE`/`FREE_SHARES`, added `able_shares` (actually tradable shares — closer to real selling pressure) |
+| **Industry ranking sort fix** | The clist request lacked a sort field, so top/bottom slices weren't actually ordered by change → added `fid=f3`, now truly sorted descending |
+| **Shenzhen Connect caveat** | Since the 2024-08 intraday-disclosure tightening, the sgt minute series is unreliable (hgt still fine); use HKEX official daily stats for authoritative northbound data (in the backup table) |
+| **Endpoint routing table** | § → function → purpose → source: the first one-page overview of 60+ embedded functions, letting agents jump to a section instead of reading the whole file |
+| **Endpoints 40 → 43, data sources 13 → 15** | Added SSE & SZSE official as first-party sources; FAQ adds an Eastmoney-ban playbook / CLS revival / mootdx-abandoned notes |
 
-## V3.2.3 Highlights
-
-| Change | Description |
-|--------|-------------|
-| **Industry-report endpoint (new)** | Added Eastmoney industry reports `eastmoney_industry_reports()` to the research layer; same endpoint as single-stock reports (only `qType=1`); `industry_code="*"` pulls all industries, pass an Eastmoney industry code (e.g. `1238`=IT Services Ⅱ) to filter, PDF reuses `download_pdf()`, throttled via `em_get`. Endpoints 27 → 28 |
-| **Sector membership re-sourced (#18)** | Baidu PAE `getrelatedblock` is dead (`ResultCode 10003`) → switched to Eastmoney `slist`; one request returns all of a stock's sectors (industry/concept/region + BK code + change% + leading stock), no auth, throttled via `em_get` |
-| **cninfo orgId resolved dynamically (#19)** | Hardcoded `gssx0{code}` made many 601xxx tickers (Ping An / ICBC / PetroChina, etc.) return zero filings → now resolves the real orgId from the official map `szse_stock.json` (6198 stocks, module-level cache), hardcode kept as fallback |
-| **Fixed hidden crash in combined example** | Example still called the v3.1-removed `baidu_fund_flow_history` → switched to `eastmoney_fund_flow_minute` |
-| **Mainland residential IP throttling note** | §4.5 fund flow / §5.1 news: some mainland residential IPs hit intermittent Eastmoney throttling (`HTTP 000` / empty) — not a code bug, retry or switch network |
-| **Data-source priority principle** (since V3.2) | Prefer mootdx (TDX) / Tencent — both never IP-banned in practice, safe for high-frequency use. Use Eastmoney only for its exclusive data |
-| **Unified Eastmoney throttling** | New `em_get()` entry point; all Eastmoney endpoints (datacenter/push2/reportapi/search/np-weblist) route through it with built-in serial rate-limit (≥1s + jitter) + session reuse — copied code is ban-safe by default |
-| **Eastmoney rate-limit documented** | New "Data-source priority & Eastmoney anti-ban" section lists ban thresholds (>5/s, ≥10 concurrent, ≥200/min, ≥300/5min) and anti-ban rules |
-| **Cailianpress deprecated (#14)** | cls.cn old API returns 404 — marked deprecated, replaced by Eastmoney global news |
+> Earlier version highlights: see [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
@@ -487,6 +603,8 @@ Just tell your AI assistant:
 | **last (exclusive only)** | **Eastmoney** datacenter/push2/reportapi/search/np-weblist | HTTP | **Medium — has rate-limit risk** | Dragon-tiger / lockup / margin / block trade / shareholders / dividends / fund flow / reports / news (all via `em_get()`) |
 
 > **Architecture:** Except mootdx (TCP binary protocol), all sources use direct HTTP API calls, zero third-party data wrapper dependencies. **Eastmoney APIs are rate-limited; all calls go through `em_get()` for serial throttling. For batch jobs, increase `EM_MIN_INTERVAL`.**
+>
+> **Fallback (V3.4 new):** When any primary source is banned or broken, check the "Backup Sources & Fallback Strategy" section in SKILL.md — every data category has an independent backup on a **different domain and rate-limit plane** (SSE/SZSE official / Sina / THS / HKEX), unaffected when Eastmoney bans you.
 
 ---
 
